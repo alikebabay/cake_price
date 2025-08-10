@@ -1,0 +1,22 @@
+*.env
+# API request scratch files
+api requests.py
+*.http
+*.rest
+
+# Logs
+*.log
+#test scripts
+test_script.py
+test_statgov.py
+#proxy script
+proxy_searcher.py
+# Test artifacts
+*.json
+*.tmp
+*.cache
+.tox/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+
