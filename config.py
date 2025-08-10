@@ -15,6 +15,12 @@ if not TOKEN:
 
 BOT_USERNAME = _normalize_username(os.getenv("BOT_USERNAME"))
 
+# В Cloud Run есть env K_SERVICE — используем /tmp
+if os.getenv("K_SERVICE"):
+    default_db = "/tmp/exchange_rates.db"
+else:
+    default_db = str(Path(__file__).with_name("exchange_rates.db"))
+
 # Путь к БД
 DB_PATH = os.getenv("DB_PATH", str(Path(__file__).with_name("exchange_rates.db")))
 

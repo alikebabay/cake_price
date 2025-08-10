@@ -8,7 +8,9 @@ from config import TOKEN, BOT_USERNAME, assert_required
 from rate_dispatcher import serve_cached_and_update
 
 
-
+PORT = int(os.getenv("PORT", "8080"))                  # Cloud Run даст $PORT
+PUBLIC_URL = os.getenv("PUBLIC_URL", "").rstrip("/")   # сюда вставим URL сервиса после деплоя
+WEBHOOK_PATH = "/tgwebhook"                            # конечная точка вебхука
 
 POPULAR_CURRENCIES = {"USD", "BYN", "UAH", "RUB", "KGS", "UZS", "CNY"}
 
@@ -118,6 +120,21 @@ def main():
 
 # Обработка ошибок
     application.add_error_handler(error)
+    # application.add_handler(...)
+
+    if PUBLIC_URL:
+        # Cloud Run: слушаем HTTP и выставляем вебхук
+        application.run_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            url_path=WEBHOOK_PATH.strip("/"),
+            webhook_url=f"{PUBLIC_URL}{WEBHOOK_PATH}",
+            drop_pending_updates=True,
+        )
+    else:
+        # локальная разработка: обычный polling
+        application.run_polling(drop_pending_updates=True)
+
 
     print("Опрашиваем...", flush=True)
     application.run_polling(drop_pending_updates=True, poll_interval=3)
