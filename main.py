@@ -1,4 +1,5 @@
 #импорты
+import re
 import logging
 from typing import Final
 from telegram import Update, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
@@ -14,6 +15,32 @@ WEBHOOK_PATH = "/tgwebhook"                            # конечная точ
 
 POPULAR_CURRENCIES = {"USD", "BYN", "UAH", "RUB", "KGS", "UZS", "CNY"}
 
+# Синонимы (можешь дополнять)
+CURRENCY_ALIASES = {
+    "USD": ["USD", "$", "ДОЛЛАР", "ДОЛЛ.", "БАКС", "БАКСЫ", "АМЕРИКАНСКИЙДОЛЛАР"],
+    "BYN": ["BYN", "БЕЛРУБ", "БЕЛ.РУБЛЬ", "БЕЛОРУССКИЙРУБЛЬ"],
+    "UAH": ["UAH", "ГРИВНА", "ГРН", "УКРАИНСКАЯГРИВНА"],
+    "RUB": ["RUB", "РУБ", "РУБЛЬ", "₽", "РОССИЙСКИЙРУБЛЬ", "RUR"],
+    "KGS": ["KGS", "СОМ", "КЫРГЫЗСКИЙСОМ"],
+    "UZS": ["UZS", "СУМ", "УЗБЕКСКИЙСУМ"],
+    "CNY": ["CNY", "ЮАНЬ", "КИТАЙСКИЙЮАНЬ", "¥", "RMB"]
+}
+
+ALIAS_TO_CODE = {alias: code for code, aliases in CURRENCY_ALIASES.items() for alias in aliases}
+for code in POPULAR_CURRENCIES:
+    ALIAS_TO_CODE[code] = code
+
+def _norm(s: str) -> str:
+    s = (s or "").strip().upper().replace("Ё", "Е")
+    # оставляем буквы/цифры и валютные символы: $, ₽, ¥, ₼, €, £
+    s = re.sub(r"[^A-ZА-Я0-9$₽¥₼€£]", "", s)
+    return s
+
+#Разрешаем любые ISO-коды как запасной путь:
+def _try_iso_code(key: str) -> str | None:
+    # принимаем любые 3 латинские буквы как ISO 4217 код
+    return key if re.fullmatch(r"[A-Z]{3}", key) else None
+
 # Включим ведение журнала
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
@@ -22,44 +49,45 @@ logger = logging.getLogger(__name__)
 
 
 #состояния - глубина меню
-MENU, DISTRICT_SELECTED = range(2)
+MENU = 1
 
 #управление ботом
 #команда старт
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [
-        [KeyboardButton("USD")],
-        [KeyboardButton("BYN")],
-        [KeyboardButton("UAH")],
-        [KeyboardButton("RUB")],
-        [KeyboardButton("KGS")],
-        [KeyboardButton("UZS")],
-        [KeyboardButton("CNY")]
-    ]
+    keyboard = [[KeyboardButton(code)] for code in sorted(POPULAR_CURRENCIES)]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    await update.message.reply_text("Узнать цену казахского торта. Введите название валюты (или exit для выхода):", reply_markup=reply_markup)
+    await update.message.reply_text(
+        "Узнать цену казахского торта. Выберите популярную валюту или пришлите ISO-код (например, EUR):",
+        reply_markup=reply_markup
+    )
     return MENU
 #выбор валюты
 async def choose_currency(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    code = update.message.text.strip().upper()
+    raw = (update.message.text or "").strip()
+    key = _norm(raw)
 
-    if code in POPULAR_CURRENCIES:
-        # тут больше не считаем сами — всё делает диспетчер (кэш/апи/сохранение/ответ)
+    if key in {"EXIT", "ВЫХОД", "ОТМЕНА", "CANCEL"}:
+        return await cancel(update, context)
+
+    code = ALIAS_TO_CODE.get(key) or _try_iso_code(key)
+    if code:
         await serve_cached_and_update(update, code)
-    else:
-        await update.message.reply_text("Введите название валюты вручную или нажмите /start.")
+        return MENU
 
+    await update.message.reply_text(
+        "Не распознал валюту. Популярные — на клавиатуре. "
+        "Для остальных пришлите 3-буквенный ISO-код (например: EUR, GBP, TRY)."
+    )
     return MENU
-
 
 # Обработка /cancel
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Диалог завершён.")
+    await update.message.reply_text("Диалог завершён. Нажмите /start, чтобы начать заново.")
     return ConversationHandler.END
 
 #другие команды
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Печатайте команды, чтобы получить помощь")
+    await update.message.reply_text("Напишите валюту текстом (USD, рубль, юань) или используйте /start.")
 
 async def custom_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Это стандартный запрос")
@@ -67,26 +95,32 @@ async def custom_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 #использование бота в чатах
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message_type: str = update.message.chat.type
-    text: str = update.message.text
+    text: str = update.message.text or ""
 
-    print(f'User ({update.message.chat.id}) in {message_type}: "{text}"')
-
-    if message_type == "group":
-        if BOT_USERNAME in text:
-            new_text: str = text.replace(BOT_USERNAME, "").strip()
-            response: str = handle_response(new_text)
-        else:
+    # В группах — реагируем только на упоминание бота
+    if message_type in {"group", "supergroup"}:
+        if not BOT_USERNAME or BOT_USERNAME not in text:
             return
-    else:
-        response: str = handle_response(text)
-    print("Bot", response)
-    await update.message.reply_text(response)
-# 🔽 Добавляем мягкую заглушку
-def handle_response(text: str) -> str:
-    return (
-        "Я пока не понимаю такие команды вне сценария.\n\n"
-        "Пожалуйста, нажмите /start и выберите валюту с помощью кнопок ниже, "
-        "чтобы получить курс"
+        # вырезаем @bot из текста
+        text = text.replace(BOT_USERNAME, "").strip()
+
+    key = _norm(text)
+
+    # Выходные слова
+    if key in {"EXIT", "ВЫХОД", "ОТМЕНА", "CANCEL"}:
+        await update.message.reply_text("Диалог завершён. Нажмите /start, чтобы начать заново.")
+        return
+
+    # Валюта?
+    code = ALIAS_TO_CODE.get(key) or _try_iso_code(key)
+    if code:
+        await serve_cached_and_update(update, code)
+        return
+
+    # Мягкая подсказка
+    await update.message.reply_text(
+        "Не распознал валюту. Популярные — на клавиатуре. "
+        "Для остальных пришлите ISO-код: EUR, GBP, TRY и т.п."
     )
 
 #обработка ошибок
@@ -116,7 +150,7 @@ def main():
     application.add_handler(CommandHandler("custom", custom_command))
 
 # Ответы на текстовые сообщения
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message), group=1)
 
 # Обработка ошибок
     application.add_error_handler(error)
@@ -136,8 +170,7 @@ def main():
         application.run_polling(drop_pending_updates=True)
 
 
-    print("Опрашиваем...", flush=True)
-    application.run_polling(drop_pending_updates=True, poll_interval=3)
+
 if __name__ == "__main__":
     main()
 
