@@ -1,13 +1,20 @@
-FROM python:3.11-slim
+FROM python:3.13-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Устанавливаем зависимости
+# Сначала зависимости — для кеша слоёв
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Копируем исходники
+# Код
 COPY . .
 
-# Запускаем в интерактиве (чтобы работал input)
+# Каталог для БД (в контейнере)
+RUN mkdir -p /data
+ENV DB_PATH=/data/exchange_rates.db
+
+
 CMD ["python", "main.py"]

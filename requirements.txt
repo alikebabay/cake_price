@@ -1,9 +1,4 @@
 requests
 beautifulsoup4
-sqlite3
-os
-logging
-telegram
-typing
-datetime
-dotenv
+python-telegram-bot
+

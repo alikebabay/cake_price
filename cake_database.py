@@ -1,7 +1,8 @@
 import sqlite3
 from datetime import datetime
 import os
-DB_PATH = os.path.join(os.path.dirname(__file__), "exchange_rates.db")
+from config import DB_PATH
+
 TS_FMT = "%Y-%m-%d %H:%M:%S"
 
 #проверка индекса

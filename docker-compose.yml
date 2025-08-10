@@ -1,0 +1,16 @@
+
+services:
+  cake_price:
+    build:
+      context: .
+      dockerfile: dockerfile
+    env_file:
+      - dotenv_cake.env
+    environment:
+      - DB_PATH=/data/exchange_rates.db
+    volumes:
+      - exchange_rates_data:/data
+    restart: unless-stopped
+
+volumes:
+  exchange_rates_data:

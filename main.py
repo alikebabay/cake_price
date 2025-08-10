@@ -4,8 +4,11 @@ from typing import Final
 from telegram import Update, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import (Application, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler)
 import os
-from config import TOKEN, BOT_USERNAME
+from config import TOKEN, BOT_USERNAME, assert_required
 from rate_dispatcher import serve_cached_and_update
+
+
+
 
 POPULAR_CURRENCIES = {"USD", "BYN", "UAH", "RUB", "KGS", "UZS", "CNY"}
 
@@ -89,9 +92,12 @@ async def error(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print(f"Update {update} caused error {context.error}")
 
 #запуск бота
-
 def main():
-    print("Бот запускается...")
+    if not TOKEN:
+        print("FATAL: TELEGRAM_TOKEN is not set", flush=True)
+        raise SystemExit(1)
+
+    print(f"Бот запускается... @{BOT_USERNAME}" if BOT_USERNAME else "Бот запускается...", flush=True)
 
     application = Application.builder().token(TOKEN).concurrent_updates(False).build()
 
@@ -113,8 +119,8 @@ def main():
 # Обработка ошибок
     application.add_error_handler(error)
 
-    print("Опрашиваем...")
-    application.run_polling(poll_interval=3)
+    print("Опрашиваем...", flush=True)
+    application.run_polling(drop_pending_updates=True, poll_interval=3)
 if __name__ == "__main__":
     main()
 
