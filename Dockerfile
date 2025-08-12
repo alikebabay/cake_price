@@ -16,5 +16,6 @@ COPY . .
 RUN mkdir -p /data
 ENV DB_PATH=/data/exchange_rates.db
 
+#renamed to Dockerfile
 
 CMD ["python", "main.py"]
