@@ -3,7 +3,7 @@ services:
   cake_price:
     build:
       context: .
-      dockerfile: dockerfile
+      dockerfile: Dockerfile
     env_file:
       - dotenv_cake.env
     environment:
