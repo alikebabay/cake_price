@@ -23,6 +23,14 @@ def cache_rate(title: str, rate: float):
         "ts": firestore.SERVER_TIMESTAMP,   # время сервера
     })
 
+def _fmt_ts(ts) -> str:
+    # ts может быть None или datetime (UTC). Вернём строку как в SQLite.
+    if ts is None:
+        ts = datetime.now(timezone.utc)
+    if getattr(ts, "tzinfo", None) is not None:
+        ts = ts.astimezone(timezone.utc).replace(tzinfo=None)
+    return ts.strftime("%Y-%m-%d %H:%M:%S")
+
 def get_cached_rate(title: str):
     """Возвращает (rate, ts) как и SQLite; None если нет записи."""
     doc = _col().document(title.strip().upper()).get()
@@ -32,8 +40,3 @@ def get_cached_rate(title: str):
     rate = float(data["rate"])
     ts = data.get("ts")
     return float(data["rate"]), data.get("ts")   # ts может быть None на самом первом чтении
-
-# на всякий случай оставим удобный шорткат
-def get_rate(title: str):
-    res = get_cached_rate(title)
-    return None if res is None else res[0]
