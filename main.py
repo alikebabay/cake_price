@@ -61,6 +61,12 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
     return MENU
+
+# ISO-коды вне диалога: UAH / USD / BYN и т.п.
+async def iso_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    code = (update.message.text or "").strip().upper()
+    await serve_cached_and_update(update, code)
+
 #выбор валюты
 async def choose_currency(update: Update, context: ContextTypes.DEFAULT_TYPE):
     raw = (update.message.text or "").strip()
@@ -143,14 +149,21 @@ def main():
         states={MENU: [MessageHandler(filters.TEXT & ~filters.COMMAND, choose_currency)]},
         fallbacks=[CommandHandler("cancel", cancel)],
         )
-    application.add_handler(conv_handler)
+    application.add_handler(conv_handler) # group=0 по умолчанию
+    # 2) отдельный хэндлер для ISO-кодов (ровно 3 латинские буквы)
+    application.add_handler(
+        MessageHandler(
+            filters.Regex(r"^[A-Za-z]{3}$") & ~filters.COMMAND,
+            iso_handler
+        )
+    )
 
 # Другие команды
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("custom", custom_command))
 
 # Ответы на текстовые сообщения
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message), group=1)
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.Regex(r"^[A-Za-z]{3}$"), handle_message), group=1)
 
 # Обработка ошибок
     application.add_error_handler(error)
