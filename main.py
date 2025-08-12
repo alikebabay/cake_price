@@ -1,5 +1,4 @@
 #импорты
-import re
 import logging
 from typing import Final
 from telegram import Update, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
@@ -7,39 +6,14 @@ from telegram.ext import (Application, CommandHandler, MessageHandler, filters, 
 import os
 from config import TOKEN, BOT_USERNAME, assert_required
 from rate_dispatcher import serve_cached_and_update
+from cake_dictionary import POPULAR_CURRENCIES, ALIAS_TO_CODE, _norm, _try_iso_code, CANCEL_ALIASES
+
 
 
 PORT = int(os.getenv("PORT", "8080"))                  # Cloud Run даст $PORT
 PUBLIC_URL = os.getenv("PUBLIC_URL", "").rstrip("/")   # сюда вставим URL сервиса после деплоя
 WEBHOOK_PATH = "/tgwebhook"                            # конечная точка вебхука
 
-POPULAR_CURRENCIES = {"USD", "BYN", "UAH", "RUB", "KGS", "UZS", "CNY"}
-
-# Синонимы (можешь дополнять)
-CURRENCY_ALIASES = {
-    "USD": ["USD", "$", "ДОЛЛАР", "ДОЛЛ.", "БАКС", "БАКСЫ", "АМЕРИКАНСКИЙДОЛЛАР"],
-    "BYN": ["BYN", "БЕЛРУБ", "БЕЛ.РУБЛЬ", "БЕЛОРУССКИЙРУБЛЬ"],
-    "UAH": ["UAH", "ГРИВНА", "ГРН", "УКРАИНСКАЯГРИВНА"],
-    "RUB": ["RUB", "РУБ", "РУБЛЬ", "₽", "РОССИЙСКИЙРУБЛЬ", "RUR"],
-    "KGS": ["KGS", "СОМ", "КЫРГЫЗСКИЙСОМ"],
-    "UZS": ["UZS", "СУМ", "УЗБЕКСКИЙСУМ"],
-    "CNY": ["CNY", "ЮАНЬ", "КИТАЙСКИЙЮАНЬ", "¥", "RMB"]
-}
-
-ALIAS_TO_CODE = {alias: code for code, aliases in CURRENCY_ALIASES.items() for alias in aliases}
-for code in POPULAR_CURRENCIES:
-    ALIAS_TO_CODE[code] = code
-
-def _norm(s: str) -> str:
-    s = (s or "").strip().upper().replace("Ё", "Е")
-    # оставляем буквы/цифры и валютные символы: $, ₽, ¥, ₼, €, £
-    s = re.sub(r"[^A-ZА-Я0-9$₽¥₼€£]", "", s)
-    return s
-
-#Разрешаем любые ISO-коды как запасной путь:
-def _try_iso_code(key: str) -> str | None:
-    # принимаем любые 3 латинские буквы как ISO 4217 код
-    return key if re.fullmatch(r"[A-Z]{3}", key) else None
 
 # Включим ведение журнала
 logging.basicConfig(
@@ -72,7 +46,7 @@ async def choose_currency(update: Update, context: ContextTypes.DEFAULT_TYPE):
     raw = (update.message.text or "").strip()
     key = _norm(raw)
 
-    if key in {"EXIT", "ВЫХОД", "ОТМЕНА", "CANCEL"}:
+    if key in CANCEL_ALIASES:
         return await cancel(update, context)
 
     code = ALIAS_TO_CODE.get(key) or _try_iso_code(key)
@@ -113,7 +87,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     key = _norm(text)
 
     # Выходные слова
-    if key in {"EXIT", "ВЫХОД", "ОТМЕНА", "CANCEL"}:
+    if key in CANCEL_ALIASES:
         await update.message.reply_text("Диалог завершён. Нажмите /start, чтобы начать заново.")
         return
 
