@@ -6,7 +6,6 @@ MAX_AGE = timedelta(hours=24)
 
 async def serve_cached_and_update(update, title: str):
     title = title.strip().upper()
-
     # 1. Проверяем кэш
     cached = get_cached_rate(title)  # ('USD', 1282.05, '2025-08-10 15:42:00') или None
     if cached:
