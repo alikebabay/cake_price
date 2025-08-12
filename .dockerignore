@@ -7,3 +7,5 @@ __pycache__/
 .env
 dotenv_*.env
 exchange_rates.db
+run.ps1
+testing_token.env

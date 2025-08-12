@@ -20,3 +20,5 @@ proxy_searcher.py
 __pycache__/
 *.py[cod]
 
+#environment switcher
+run.ps1
