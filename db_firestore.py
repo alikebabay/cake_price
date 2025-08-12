@@ -29,6 +29,8 @@ def get_cached_rate(title: str):
     if not doc.exists:
         return None
     data = doc.to_dict() or {}
+    rate = float(data["rate"])
+    ts = data.get("ts")
     return float(data["rate"]), data.get("ts")   # ts может быть None на самом первом чтении
 
 # на всякий случай оставим удобный шорткат
