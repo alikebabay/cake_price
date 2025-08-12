@@ -1,4 +1,4 @@
-from cake_database import get_cached_rate, cache_rate, is_rate_cached
+from db import get_cached_rate, cache_rate, is_rate_cached
 from calculator import convert_kzt
 from datetime import datetime, timedelta
 

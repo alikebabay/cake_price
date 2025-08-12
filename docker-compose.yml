@@ -8,6 +8,7 @@ services:
       - dotenv_cake.env
     environment:
       - DB_PATH=/data/exchange_rates.db
+      - DB_BACKEND=sqlite
     volumes:
       - exchange_rates_data:/data
     restart: unless-stopped
