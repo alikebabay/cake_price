@@ -2,7 +2,7 @@
 import os
 from google.cloud import firestore
 
-_PROJECT = os.getenv("GOOGLE_CLOUD_PROJECT")  # в Cloud Run подставится сам
+_PROJECT = os.getenv("GOOGLE_CLOUD_PROJECT")
 _db = None
 
 def _get_db():
@@ -20,11 +20,18 @@ def is_rate_cached(title: str) -> bool:
 def cache_rate(title: str, rate: float):
     _col().document(title.strip().upper()).set({
         "rate": float(rate),
-        "ts": firestore.SERVER_TIMESTAMP,
+        "ts": firestore.SERVER_TIMESTAMP,   # время сервера
     })
 
 def get_cached_rate(title: str):
+    """Возвращает (rate, ts) как и SQLite; None если нет записи."""
     doc = _col().document(title.strip().upper()).get()
     if not doc.exists:
         return None
-    return float(doc.to_dict()["rate"])
+    data = doc.to_dict() or {}
+    return float(data["rate"]), data.get("ts")   # ts может быть None на самом первом чтении
+
+# на всякий случай оставим удобный шорткат
+def get_rate(title: str):
+    res = get_cached_rate(title)
+    return None if res is None else res[0]
