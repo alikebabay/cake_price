@@ -31,7 +31,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [[KeyboardButton(code)] for code in sorted(POPULAR_CURRENCIES)]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     await update.message.reply_text(
-        "Узнать цену казахского торта. Выберите популярную валюту или пришлите ISO-код (например, EUR):",
+        "Узнать цену казахского торта. Выберите популярную валюту или введие первые 4 буквы названия страны. Например, амер",
         reply_markup=reply_markup
     )
     return MENU
