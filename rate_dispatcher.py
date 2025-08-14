@@ -5,62 +5,66 @@ from datetime import datetime, timedelta
 MAX_AGE = timedelta(hours=24)
 
 async def serve_cached_and_update(update, title: str):
-    title = title.strip().upper()
-    # 1. Проверяем кэш
-    cached = get_cached_rate(title)  # ('USD', 1282.05, '2025-08-10 15:42:00') или None
+    title = (title or "").strip().upper()
+    # KZT — константа, без БД/сети
+    if title == "KZT":
+        await update.message.reply_text(
+            f"Кэш • 1 торт = {CAKE_PRICE_KZT:,.2f} KZT (константа)"
+        )
+        return
+
+    # 1) Проверяем кэш (материализованная цена торта в CCY)
+    cached = get_cached_rate(title)  # ('USD', amount, 'YYYY-MM-DD HH:MM:SS') или None
     if cached:
-        c, rate, ts = cached
-        # ts в формате "YYYY-MM-DD HH:MM:SS"
+        c, amount, ts = cached
         age = datetime.now() - datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
 
         if age <= MAX_AGE:
             await update.message.reply_text(
-                f"Кэш • 600000 KZT = {float(rate):,.2f} {c} (обновлено: {ts})"
+                f"Кэш • 600000 KZT = {float(amount):,.2f} {c} (обновлено: {ts})"
             )
             return
 
-
-        # Старше 24 ч — тянем новый курс
-        new_rate = convert_kzt(600_000, title)
-        if new_rate is not None:
+        # Старше TTL — пробуем обновить
+        new_amount = convert_kzt(title)  # 600k берется из конфига
+        if new_amount is not None:
             try:
-                clean_rate = float(str(new_rate).replace(",", "").strip())
+                clean_amount = float(str(new_amount).replace(",", "").strip())
             except (ValueError, TypeError):
                 await update.message.reply_text("❌ Ошибка: неверный формат курса.")
                 return
 
-            cache_rate(title, clean_rate)  # обновит и timestamp
+            cache_rate(title, clean_amount)  # обновит и timestamp
             now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             await update.message.reply_text(
-                f"Обновил • 600000 KZT = {clean_rate:,.2f} {title} (обновлено: {now_str})"
+                f"Обновил • 600000 KZT = {clean_amount:,.2f} {title} (обновлено: {now_str})"
             )
             return
         else:
             # API недоступно — показываем устаревший кэш
             await update.message.reply_text(
-                f"⚠️ Сервис недоступен. Показываю кэш {float(rate):,.2f} {c} (обновлено: {ts})"
+                f"⚠️ Сервис недоступен. Показываю кэш {float(amount):,.2f} {c} (обновлено: {ts})"
             )
             return
 
+    # 2) Кэша нет — тянем из API, сохраняем и отдаём
+    new_amount = convert_kzt(title)  # 600k из конфига
+    if new_amount is not None:
+        try:
+            clean_amount = float(str(new_amount).replace(",", "").strip())
+        except (ValueError, TypeError):
+            await update.message.reply_text("❌ Ошибка: неверный формат курса.")
+            return
+
+        cache_rate(title, clean_amount)
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        await update.message.reply_text(
+            f"Создал • 600000 KZT = {clean_amount:,.2f} {title} (обновлено: {now_str})"
+        )
+        return
     else:
-        # 3) Кэша нет — тянем из API, сохраняем и отдаём
-        new_rate = convert_kzt(600_000, title)
-        if new_rate is not None:
-            try:
-                clean_rate = float(str(new_rate).replace(",", "").strip())
-            except (ValueError, TypeError):
-                await update.message.reply_text("❌ Ошибка: неверный формат курса.")
-                return
-
-            cache_rate(title, clean_rate)
-            now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            await update.message.reply_text(
-                f"Создал • 600000 KZT = {clean_rate:,.2f} {title} (обновлено: {now_str})"
-            )
-            return
-        else:
-            await update.message.reply_text("⚠️ Сервис недоступен, кэша нет.")
-            return
+        await update.message.reply_text("⚠️ Сервис недоступен, кэша нет.")
+        return
 
 
 #тест

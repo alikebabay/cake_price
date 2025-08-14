@@ -1,6 +1,10 @@
 import os
 import sys
 from pathlib import Path
+from typing import Final
+
+# базовая цена торта. Пока константа
+CAKE_PRICE_KZT: Final[float] = 600_000
 
 def _normalize_username(s: str | None) -> str:
     s = (s or "").strip()
