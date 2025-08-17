@@ -1,6 +1,6 @@
 # db_firestore.py
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from google.cloud import firestore
 
 _PROJECT = os.getenv("GOOGLE_CLOUD_PROJECT")
