@@ -11,3 +11,5 @@ run.ps1
 testing_token.env
 #tokens
 service_account.json
+#dev_script
+wages_ingest.py
