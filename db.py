@@ -19,6 +19,15 @@ else:
         get_cached_rate,
     )
 
+
+    # ← заглушки, чтобы импорт в rate_dispatcher не падал
+    def get_wage_doc(iso3: str):
+        return None
+
+
+    def upsert_wage_doc(iso3: str, patch: dict):
+        return None
+
 __all__ = [
     "is_rate_cached",
     "cache_rate",

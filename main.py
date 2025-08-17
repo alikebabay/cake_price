@@ -6,7 +6,10 @@ from telegram.ext import (Application, CommandHandler, MessageHandler, filters, 
 import os
 from config import TOKEN, BOT_USERNAME, assert_required
 from rate_dispatcher import serve_cached_and_update
-from cake_dictionary import POPULAR_CURRENCIES, ALIAS_TO_CODE, _norm, _try_iso_code, CANCEL_ALIASES, currency_to_iso3
+from cake_dictionary import (
+    POPULAR_CURRENCIES, ALIAS_TO_CODE, _norm, _try_iso_code, CANCEL_ALIASES,
+    currency_to_iso3,
+)
 from db import get_wage_doc, upsert_wage_doc  # ← просто чтобы было видно зависимость (использует диспетчер)
 
 
@@ -25,6 +28,11 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 #состояния - глубина меню
 MENU = 1
 
+# 👉 общий резолвер: алиас/название/ISO → код валюты
+def _resolve_code(text: str) -> str | None:
+    key = _norm(text or "")
+    return ALIAS_TO_CODE.get(key) or _try_iso_code(key)
+
 #управление ботом
 #команда старт
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -35,10 +43,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
     return MENU
-# 👉 общий резолвер: алиас/название/ISO → код валюты
-def _resolve_code(text: str) -> str | None:
-    key = _norm(text or "")
-    return ALIAS_TO_CODE.get(key) or _try_iso_code(key)
+
+
 
 
 
