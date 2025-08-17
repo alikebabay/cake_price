@@ -19,9 +19,11 @@ def is_rate_cached(title: str) -> bool:
     return _col().document(title.strip().upper()).get().exists
 
 def cache_rate(title: str, rate: float):
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
     _col().document(title.strip().upper()).set({
         "rate": float(rate),
-        "ts": firestore.SERVER_TIMESTAMP,   # время сервера
+        "ts": expires_at,                 # время истечения
+        "updated_at": firestore.SERVER_TIMESTAMP  # для отладки   # время сервера
     })
 
 def _ts_to_str(ts) -> str:
