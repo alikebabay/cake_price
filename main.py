@@ -35,30 +35,43 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
     return MENU
+# 👉 общий резолвер: алиас/название/ISO → код валюты
+def _resolve_code(text: str) -> str | None:
+    key = _norm(text or "")
+    return ALIAS_TO_CODE.get(key) or _try_iso_code(key)
 
-# ISO-коды вне диалога: UAH / USD / BYN и т.п.
+
+
+# ISO-коды вне диалога (раньше тут было просто .upper())
 async def iso_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    code = (update.message.text or "").strip().upper()
-    iso3 = currency_to_iso3(code)  # ← берём ISO3 из нового JSON
+    raw = (update.message.text or "").strip()
+    code = _resolve_code(raw)
+    if not code:
+        await update.message.reply_text(
+            "Не распознал валюту. Пришлите 3-буквенный ISO-код (например: EUR, GBP) "
+            "или начните вводить первые 4 буквы названия страны."
+        )
+        return
+    iso3 = currency_to_iso3(code)
     await serve_cached_and_update(update, code, country_iso3=iso3)
 
-#выбор валюты
+# выбор валюты (оставляем ту же логику, но используем общий резолвер)
 async def choose_currency(update: Update, context: ContextTypes.DEFAULT_TYPE):
     raw = (update.message.text or "").strip()
-    key = _norm(raw)
 
-    if key in CANCEL_ALIASES:
+    if _norm(raw) in CANCEL_ALIASES:
         return await cancel(update, context)
 
-    code = ALIAS_TO_CODE.get(key) or _try_iso_code(key)
+    code = _resolve_code(raw)
     if code:
-        iso3 = currency_to_iso3(code)  # маппинг валюта-страна
+        iso3 = currency_to_iso3(code)
         await serve_cached_and_update(update, code, country_iso3=iso3)
         return MENU
 
     await update.message.reply_text(
         "Не распознал валюту. Популярные — на клавиатуре. "
-        "Для остальных пришлите 3-буквенный ISO-код (например: EUR, GBP, TRY)."
+        "Для остальных пришлите 3-буквенный ISO-код (например: EUR, GBP, TRY) "
+        "или начните вводить первые 4 буквы названия страны."
     )
     return MENU
 

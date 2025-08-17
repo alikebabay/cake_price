@@ -46,10 +46,8 @@ async def serve_cached_and_update(
     if country_iso3:
         doc = get_wage_doc(country_iso3)  # dict|None
         if doc:
-            # В UNECE поле может называться 'value' (USD)
             salary_usd = doc.get("salary_usd", doc.get("value"))
             if salary_usd is not None:
-                # Нужна цена торта в USD (600k KZT -> USD), берём тем же кэшем
                 usd_cached = get_cached_rate("USD")
                 if usd_cached:
                     _, usd_price, _ = usd_cached
@@ -64,33 +62,46 @@ async def serve_cached_and_update(
                     cake_salary = float(salary_usd) / float(price_usd)
                     salary_kzt = cake_salary * float(CAKE_PRICE_KZT)
 
+                    # подготовим «красивую» метку времени (и для апдейта, и для печати)
+                    now_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+
                     # кэшируем в том же документе UNECE
                     try:
                         upsert_wage_doc(country_iso3, {
                             "cake_salary": cake_salary,
                             "salary_kzt": salary_kzt,
-                            "updated_at": datetime.utcnow().isoformat()
+                            "updated_at": now_str,  # строкой — чтобы и печатать удобно
                         })
                     except Exception:
-                        # не валим ответ пользователю, если апдейт не удался
                         pass
 
                     country_name = doc.get("country", country_iso3)
                     src = doc.get("source") or {}
-                    upd = doc.get("updated_at")
+                    src_name = src.get("name", "UNECE")
+                    src_year = src.get("year", 2024)
+                    src_url = src.get("url", "")
 
+                    # Возьмём дату в таком порядке: updated_at (строка), ingested_at, now_str
+                    upd_display = _fmt_ts(doc.get("updated_at") or doc.get("ingested_at") or now_str)
+
+                    # Порядок и формат — как ты просил:
                     msg += (
                         f"\n\nСредняя зарплата в {country_name}: {salary_kzt:,.0f} KZT"
+                        f"\nИсточник: {src_name} ({src_year}), ссылка: {src_url} ({upd_display})"
                         f"\nЭто ≈ {cake_salary:,.2f} тортов (600 000 KZT за торт)"
                     )
-                    if src or upd:
-                        src_name = src.get("name", "UNECE")
-                        src_year = src.get("year", 2024)
-                        src_url  = src.get("url", "")
-                        msg += f"\nИсточник: {src_name} ({src_year}), {src_url} ({upd})"
 
-    await update.message.reply_text(msg)
+    await update.message.reply_text(msg.replace(",", " "))
 
+#форматтер времени
+def _fmt_ts(v):
+    try:
+        from datetime import datetime
+        if isinstance(v, datetime):
+            return v.strftime("%Y-%m-%d %H:%M:%S")
+        return "" if v is None else str(v)
+    except Exception:
+        return ""
 
 #тест
 import asyncio
