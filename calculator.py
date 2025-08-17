@@ -1,8 +1,59 @@
 import requests
 from typing import Optional
-from config import CAKE_PRICE_KZT
+from datetime import datetime, timezone
+from config import CAKE_PRICE_KZT, UNECE_YEAR
 
 _API = "https://open.er-api.com/v6/latest/KZT"
+
+class FXError(Exception): ...
+class NoWageError(Exception): ...
+
+
+def _get_usd_kzt_rate() -> float:
+    """Берём курс USD/KZT из внешнего API."""
+    r = requests.get(_API, timeout=10)
+    if r.status_code != 200:
+        raise FXError(f"FX API error: {r.status_code}")
+    data = r.json()
+    # API: base=KZT, rates.USD -> сколько USD за 1 KZT
+    usd_per_kzt = data["rates"]["USD"]
+    # Нам нужен KZT за 1 USD, поэтому берём обратное
+    kzt_per_usd = 1 / usd_per_kzt
+    return kzt_per_usd
+
+
+def compute_cake_salary(salary_usd: float) -> dict:
+    """
+    salary_usd – средняя зарплата по UNECE (USD).
+    Формулы:
+      rate = курс USD/KZT
+      cake_price_usd = CAKE_PRICE_KZT / rate
+      cake_salary    = salary_usd / cake_price_usd
+      salary_kzt     = salary_usd * rate
+    """
+    if salary_usd is None:
+        raise NoWageError("No UNECE wage provided")
+
+    rate = _get_usd_kzt_rate()
+    cake_price_usd = CAKE_PRICE_KZT / rate
+    cake_salary = salary_usd / cake_price_usd
+    salary_kzt = salary_usd * rate
+
+    return {
+        "salary_kzt": salary_kzt,
+        "cake_salary": cake_salary,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "source": {
+            "name": "UNECE",
+            "url": "https://w3.unece.org",
+            "year": UNECE_YEAR,
+        },
+        "fx": {
+            "pair": "USD/KZT",
+            "rate": rate,
+            "api": _API,
+        },
+    }
 
 def convert_kzt(title: str, amount_kzt: float | None = None) -> Optional[float]:
     """Возвращает материализованную цену 1 торта в валюте CCY.

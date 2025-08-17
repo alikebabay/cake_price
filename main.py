@@ -6,8 +6,8 @@ from telegram.ext import (Application, CommandHandler, MessageHandler, filters, 
 import os
 from config import TOKEN, BOT_USERNAME, assert_required
 from rate_dispatcher import serve_cached_and_update
-from cake_dictionary import POPULAR_CURRENCIES, ALIAS_TO_CODE, _norm, _try_iso_code, CANCEL_ALIASES
-
+from cake_dictionary import POPULAR_CURRENCIES, ALIAS_TO_CODE, _norm, _try_iso_code, CANCEL_ALIASES, currency_to_iso3
+from db import get_wage_doc, upsert_wage_doc  # ← просто чтобы было видно зависимость (использует диспетчер)
 
 
 PORT = int(os.getenv("PORT", "8080"))                  # Cloud Run даст $PORT
@@ -39,6 +39,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ISO-коды вне диалога: UAH / USD / BYN и т.п.
 async def iso_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     code = (update.message.text or "").strip().upper()
+    iso3 = currency_to_iso3(code)  # ← берём ISO3 из нового JSON
     await serve_cached_and_update(update, code)
 
 #выбор валюты
@@ -51,7 +52,8 @@ async def choose_currency(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     code = ALIAS_TO_CODE.get(key) or _try_iso_code(key)
     if code:
-        await serve_cached_and_update(update, code)
+        iso3 = currency_to_iso3(code)  # маппинг валюта-страна
+        await serve_cached_and_update(update, code, country_iso3=iso3)
         return MENU
 
     await update.message.reply_text(

@@ -1,5 +1,5 @@
 # cake_dictionary.py
-from typing import Final, Mapping, Set
+from typing import Final, Mapping, Set, Optional
 import json, re, unicodedata
 from importlib.resources import files
 
@@ -10,12 +10,24 @@ def _norm(s: str) -> str:
     # keep letters/digits and currency symbols
     return re.sub(r"[^A-ZА-Я0-9$₽¥₼€£]", "", s)
 
+#маппер валюта-страна мира
+def _load_ccy_to_iso3() -> dict[str, str]:
+    text = files("cake_data").joinpath("currency_to_iso3.json").read_text("utf-8")
+    raw = json.loads(text)
+    # защитимся от мусора и приведём к верхнему регистру
+    return {
+        (k or "").strip().upper(): (v or "").strip().upper()
+        for k, v in raw.items()
+        if isinstance(k, str) and isinstance(v, str) and len(k) == 3 and len(v) == 3
+    }
+
 #алаясы для всех валют мира
 def _load_aliases() -> dict[str, list[str]]:
     text = files("cake_data").joinpath("aliases.json").read_text("utf-8")
     return json.loads(text)  # {"USD": ["USD","$","ДОЛЛАР",...], ...}
 
 _RAW = _load_aliases()
+_CCY_TO_ISO3 = _load_ccy_to_iso3()
 
 
 # exactly your popular set (leave as-is)
@@ -41,3 +53,18 @@ CANCEL_ALIASES: Final[Set[str]] = {_norm(x) for x in ["EXIT", "ВЫХОД", "О�
 # --- Ровно как у тебя: принимаем любые 3 латинские буквы как ISO-код ---
 def _try_iso_code(key: str) -> str | None:
     return key if re.fullmatch(r"[A-Z]{3}", key) else None
+
+def currency_to_iso3(ccy: str | None) -> Optional[str]:
+    """Возвращает ISO3 домашней страны по коду валюты (читает cake_data/currency_to_iso3.json)."""
+    if not ccy:
+        return None
+    return _CCY_TO_ISO3.get(ccy.strip().upper())
+
+def resolve_country_iso3_from_user_input(raw: str) -> Optional[str]:
+    """
+    Алиас/название/ISO валюты -> код валюты -> ISO3 страны.
+    Пример: 'амер' -> USD -> USA.
+    """
+    key = _norm(raw)
+    code = ALIAS_TO_CODE.get(key) or _try_iso_code(key)
+    return currency_to_iso3(code) if code else None

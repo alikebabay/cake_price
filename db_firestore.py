@@ -2,6 +2,7 @@
 import os
 from datetime import datetime, timezone, timedelta
 from google.cloud import firestore
+from config import UNECE_YEAR, UNECE_UNIT  # ← возьмём год/юнит из конфига
 
 _PROJECT = os.getenv("GOOGLE_CLOUD_PROJECT")
 _db = None
@@ -11,9 +12,39 @@ def _get_db():
     if _db is None:
         _db = firestore.Client(project=_PROJECT)
     return _db
-
+#коллекция курсов тортов
 def _col():
     return _get_db().collection("exchange_rates")
+
+#коллекция зарплат в тортах
+def _wages_col():
+    return _get_db().collection("avg_wages_unece")
+def _wage_doc_id(iso3: str) -> str:
+    return f"{iso3.strip().upper()}_{UNECE_YEAR}_{UNECE_UNIT}"
+
+def get_wage_doc(iso3: str) -> dict | None:
+    """
+    Возвращает Firestore-док по UNECE: country, value/salary_usd, source, updated_at и т.д.
+    Ничего не преобразуем — отдаём как есть (use-case сам разберёт поля).
+    """
+    docref = _wages_col().document(_wage_doc_id(iso3))
+    snap = docref.get()
+    return snap.to_dict() if snap.exists else None
+
+def upsert_wage_doc(iso3: str, patch: dict) -> None:
+    """
+    Идемпотентный merge в тот же документ UNECE:
+    пишем cake_salary, salary_kzt, updated_at (и что ещё передали).
+    """
+    docref = _wages_col().document(_wage_doc_id(iso3))
+    # если updated_at не положили — поставим серверное
+    if "updated_at" not in patch:
+        patch = {**patch, "updated_at": firestore.SERVER_TIMESTAMP}
+    docref.set(patch, merge=True)
+
+
+#общий функционал для проверки наличия в базе
+
 
 def is_rate_cached(title: str) -> bool:
     return _col().document(title.strip().upper()).get().exists
