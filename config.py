@@ -6,6 +6,9 @@ from typing import Final
 # базовая цена торта. Пока константа
 CAKE_PRICE_KZT: Final[float] = 600_000
 
+# UNECE
+UNECE_YEAR = 2024
+UNECE_UNIT = "USD"
 def _normalize_username(s: str | None) -> str:
     s = (s or "").strip()
     return s[1:] if s.startswith("@") else s
