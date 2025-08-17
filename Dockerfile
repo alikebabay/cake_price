@@ -12,6 +12,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Код
 COPY . .
 
+# обязательно копируем пакет с json-ами
+COPY cake_data/ cake_data/
+
 # Каталог для БД (в контейнере)
 RUN mkdir -p /data
 ENV DB_PATH=/data/exchange_rates.db

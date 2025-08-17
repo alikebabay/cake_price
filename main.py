@@ -40,7 +40,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def iso_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     code = (update.message.text or "").strip().upper()
     iso3 = currency_to_iso3(code)  # ← берём ISO3 из нового JSON
-    await serve_cached_and_update(update, code)
+    await serve_cached_and_update(update, code, country_iso3=iso3)
 
 #выбор валюты
 async def choose_currency(update: Update, context: ContextTypes.DEFAULT_TYPE):
