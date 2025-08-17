@@ -1,3 +1,5 @@
+#tokens
+service_account.json
 *.env
 # API request scratch files
 api requests.py
