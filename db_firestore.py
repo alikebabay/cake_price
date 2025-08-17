@@ -27,12 +27,17 @@ def cache_rate(title: str, rate: float):
     })
 
 def _ts_to_str(ts) -> str:
-    # Firestore может вернуть None или aware-datetime
-    if ts is None:
-        ts = datetime.now(timezone.utc)
-    if getattr(ts, "tzinfo", None):
-        ts = ts.astimezone(timezone.utc).replace(tzinfo=None)
-    return ts.strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        if ts is None:
+            return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        if isinstance(ts, datetime):
+            return ts.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        # на случай SERVER_TIMESTAMP-сентинела или чего-то другого
+        return str(ts)
+    except Exception as e:
+        import logging
+        logging.exception("Bad timestamp value: %r", ts)
+        return "1970-01-01 00:00:00"
 
 def get_cached_rate(title: str):
     """
