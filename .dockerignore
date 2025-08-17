@@ -13,3 +13,4 @@ testing_token.env
 service_account.json
 #dev_script
 wages_ingest.py
+wages_sample.csv
