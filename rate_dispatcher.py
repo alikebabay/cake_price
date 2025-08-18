@@ -1,5 +1,5 @@
 from db import get_cached_rate, cache_rate, is_rate_cached, get_wage_doc, upsert_wage_doc
-from calculator import convert_kzt
+from calculator import convert_kzt, compute_cake_salary, _get_usd_kzt_rate
 from datetime import datetime, timedelta
 from config import CAKE_PRICE_KZT
 
@@ -48,43 +48,54 @@ async def serve_cached_and_update(
         if doc:
             salary_usd = doc.get("salary_usd", doc.get("value"))
             if salary_usd is not None:
+                # пробуем достать цену торта в USD из кэша
                 usd_cached = get_cached_rate("USD")
                 if usd_cached:
                     _, usd_price, _ = usd_cached
-                    price_usd = float(usd_price)
+
+
                 else:
-                    na = convert_kzt("USD")
-                    price_usd = float(str(na).replace(",", "").strip()) if na is not None else None
+
+                    val = convert_kzt("USD")  # 600000 KZT в USD
+
+                    price_usd = float(val) if val is not None else None
+
                     if price_usd is not None:
                         cache_rate("USD", price_usd)
 
                 if price_usd:
-                    cake_salary = float(salary_usd) / float(price_usd)
-                    salary_kzt = cake_salary * float(CAKE_PRICE_KZT)
+                    # курс KZT за 1 USD = (600000 KZT) / (600000 KZT в USD)
+                    kzt_per_usd = CAKE_PRICE_KZT / float(price_usd)
 
                     # подготовим «красивую» метку времени (и для апдейта, и для печати)
                     now_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
-                    # кэшируем в том же документе UNECE
+                    # вызываем новый калькулятор
+                    calc = compute_cake_salary(float(salary_usd), kzt_per_usd=kzt_per_usd)
+
+                    cake_salary = calc["cake_salary"]
+                    salary_kzt = calc["salary_kzt"]
+                    now_str = calc["updated_at"]
+
+                    # апсертим обратно в wages
                     try:
                         upsert_wage_doc(country_iso3, {
                             "cake_salary": cake_salary,
                             "salary_kzt": salary_kzt,
-                            "updated_at": now_str,  # строкой — чтобы и печатать удобно
+                            "updated_at": now_str,
                         })
                     except Exception:
                         pass
 
+                    # оформление ответа
                     country_name = doc.get("country", country_iso3)
-                    src = doc.get("source") or {}
+                    src = calc.get("source", {})
                     src_name = src.get("name", "UNECE")
                     src_year = src.get("year", 2024)
                     src_url = src.get("url", "")
 
-                    # Возьмём дату в таком порядке: updated_at (строка), ingested_at, now_str
                     upd_display = _fmt_ts(doc.get("updated_at") or doc.get("ingested_at") or now_str)
 
-                    # Порядок и формат — как ты просил:
                     msg += (
                         f"\n\nСредняя зарплата в {country_name}: {salary_kzt:,.0f} KZT"
                         f"\nИсточник: {src_name} ({src_year}), ссылка: {src_url} ({upd_display})"

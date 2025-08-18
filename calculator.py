@@ -22,22 +22,26 @@ def _get_usd_kzt_rate() -> float:
     return kzt_per_usd
 
 
-def compute_cake_salary(salary_usd: float) -> dict:
+def compute_cake_salary(salary_usd: float, *, kzt_per_usd: float) -> dict:
     """
-    salary_usd – средняя зарплата по UNECE (USD).
+    Чистая функция: рассчитывает зарплату в KZT и «в тортах»,
+    если НА ВХОДЕ уже дан курс KZT за 1 USD.
+
+    Параметры:
+      salary_usd  — средняя зарплата (в USD)
+      kzt_per_usd — курс (сколько KZT за 1 USD)
+
     Формулы:
-      rate = курс USD/KZT
-      cake_price_usd = CAKE_PRICE_KZT / rate
+      cake_price_usd = CAKE_PRICE_KZT / kzt_per_usd
       cake_salary    = salary_usd / cake_price_usd
-      salary_kzt     = salary_usd * rate
+      salary_kzt     = salary_usd * kzt_per_usd
     """
     if salary_usd is None:
         raise NoWageError("No UNECE wage provided")
 
-    rate = _get_usd_kzt_rate()
-    cake_price_usd = CAKE_PRICE_KZT / rate
-    cake_salary = salary_usd / cake_price_usd
-    salary_kzt = salary_usd * rate
+    cake_price_usd = CAKE_PRICE_KZT / float(kzt_per_usd)
+    cake_salary = float(salary_usd) / cake_price_usd
+    salary_kzt = float(salary_usd) * float(kzt_per_usd)
 
     return {
         "salary_kzt": salary_kzt,
@@ -50,8 +54,8 @@ def compute_cake_salary(salary_usd: float) -> dict:
         },
         "fx": {
             "pair": "USD/KZT",
-            "rate": rate,
-            "api": _API,
+            "rate": float(kzt_per_usd),
+            "api": _API,  # просто справочно
         },
     }
 
