@@ -39,7 +39,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [[KeyboardButton(code)] for code in sorted(POPULAR_CURRENCIES)]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     await update.message.reply_text(
-        "Узнать цену казахского торта. Выберите популярную валюту или введие первые 4 буквы названия страны. Например, амер",
+        "Узнать цену казахского торта. Выберите популярную валюту или введите первые 4 буквы названия страны. Например, амер",
         reply_markup=reply_markup
     )
     return MENU
@@ -60,7 +60,7 @@ async def iso_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     iso3 = currency_to_iso3(code)
     await serve_cached_and_update(update, code, country_iso3=iso3)
-
+    return
 # выбор валюты (оставляем ту же логику, но используем общий резолвер)
 async def choose_currency(update: Update, context: ContextTypes.DEFAULT_TYPE):
     raw = (update.message.text or "").strip()
@@ -83,9 +83,11 @@ async def choose_currency(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Обработка /cancel
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Диалог завершён. Нажмите /start, чтобы начать заново.")
+    await update.message.reply_text(
+        "Диалог завершён. Нажмите /start, чтобы начать заново.",
+        reply_markup=ReplyKeyboardRemove()
+    )
     return ConversationHandler.END
-
 #другие команды
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Напишите валюту текстом (USD, рубль, юань) или используйте /start.")
@@ -125,8 +127,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 #обработка ошибок
-async def error(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print(f"Update {update} caused error {context.error}")
+async def error(update: object, context: ContextTypes.DEFAULT_TYPE):
+    logger.exception("Update %r caused error: %s", update, context.error)
 
 #запуск бота
 def main():
