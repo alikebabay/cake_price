@@ -117,7 +117,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Валюта?
     code = ALIAS_TO_CODE.get(key) or _try_iso_code(key)
     if code:
-        await serve_cached_and_update(update, code)
+        await serve_cached_and_update(update, code, country_iso3=currency_to_iso3(code))
         return
 
     # Мягкая подсказка
