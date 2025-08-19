@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from config import CAKE_PRICE_KZT
 
 MAX_AGE = timedelta(hours=24)
+
 async def serve_cached_and_update(update, title: str, *, country_iso3: str | None = None):
     title = (title or "").strip().upper()
 
@@ -31,6 +32,7 @@ async def serve_cached_and_update(update, title: str, *, country_iso3: str | Non
     msg = f"{'Кэш' if cached else 'Создал'} • 600000 KZT = {amount:,.2f} {code} (обновлено: {ts})"
 
     if country_iso3:
+        # USD обязателен — иначе ничего не отправляем
         usd_cached = get_cached_rate("USD")
         if usd_cached:
             _, price_usd, _ = usd_cached
@@ -40,12 +42,15 @@ async def serve_cached_and_update(update, title: str, *, country_iso3: str | Non
                 price_usd = float(val)
                 cache_rate("USD", price_usd)
             else:
-                price_usd = None
+                await update.message.reply_text("⚠️ Не удалось получить курс USD, расчёт зарплаты невозможен.")
+                return
 
-        if price_usd:
-            extra = append_salary(country_iso3, price_usd)
-            if extra:
-                msg += "\n\n" + extra
+        extra = append_salary(country_iso3, price_usd)
+        if extra:
+            msg += "\n\n" + extra
+        else:
+            await update.message.reply_text("⚠️ Зарплата не найдена.")
+            return
 
     await update.message.reply_text(msg.replace(",", " "))
 
