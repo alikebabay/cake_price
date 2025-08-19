@@ -9,48 +9,51 @@ async def serve_cached_and_update(update, title: str, *, country_iso3: str | Non
     title = (title or "").strip().upper()
 
     if title == "KZT":
-        await update.message.reply_text(f"Казахский торт стоит {CAKE_PRICE_KZT:,.2f} KZT")
-        return
-
-    cached = get_cached_rate(title)
-    if cached:
-        code, amount, ts = cached
+        msg = f"Казахский торт стоит {CAKE_PRICE_KZT:,.2f} KZT"
     else:
-        new_amount = convert_kzt(title)
-        if new_amount is None:
-            await update.message.reply_text("⚠️ Сервис недоступен, кэша нет.")
-            return
-        try:
-            amount = float(str(new_amount).replace(",", "").strip())
-        except (ValueError, TypeError):
-            await update.message.reply_text("❌ Ошибка: неверный формат курса.")
-            return
-        cache_rate(title, amount)
-        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        code = title
+        cached = get_cached_rate(title)
+        if cached:
+            code, amount, ts = cached
+        else:
+            new_amount = convert_kzt(title)
+            if new_amount is None:
+                await update.message.reply_text("⚠️ Сервис недоступен, кэша нет.")
+                return
+            try:
+                amount = float(str(new_amount).replace(",", "").strip())
+            except (ValueError, TypeError):
+                await update.message.reply_text("❌ Ошибка: неверный формат курса.")
+                return
+            cache_rate(title, amount)
+            ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            code = title
 
-    msg = f"{'Кэш' if cached else 'Создал'} • 600000 KZT = {amount:,.2f} {code} (обновлено: {ts})"
+        msg = f"{'Кэш' if cached else 'Создал'} • 600000 KZT = {amount:,.2f} {code} (обновлено: {ts})"
 
+    # ⚠️ Блок append_salary обязателен, если указан country_iso3
     if country_iso3:
-        # USD обязателен — иначе ничего не отправляем
         usd_cached = get_cached_rate("USD")
         if usd_cached:
             _, price_usd, _ = usd_cached
         else:
             val = convert_kzt("USD")
             if val is not None:
-                price_usd = float(val)
-                cache_rate("USD", price_usd)
+                try:
+                    price_usd = float(str(val).replace(",", "").strip())
+                    cache_rate("USD", price_usd)
+                except Exception:
+                    await update.message.reply_text("❌ Не удалось обработать курс USD.")
+                    return
             else:
-                await update.message.reply_text("⚠️ Не удалось получить курс USD, расчёт зарплаты невозможен.")
+                await update.message.reply_text("⚠️ Не удалось получить курс USD.")
                 return
 
         extra = append_salary(country_iso3, price_usd)
-        if extra:
-            msg += "\n\n" + extra
-        else:
-            await update.message.reply_text("⚠️ Зарплата не найдена.")
+        if not extra:
+            await update.message.reply_text("⚠️ Зарплата для страны не найдена.")
             return
+
+        msg += "\n\n" + extra
 
     await update.message.reply_text(msg.replace(",", " "))
 
