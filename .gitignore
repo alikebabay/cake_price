@@ -28,3 +28,6 @@ run.ps1
 wages_ingest.py
 wages_sample.csv
 
+#local database
+seed_firestore.py
+
