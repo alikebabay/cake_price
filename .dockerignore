@@ -15,4 +15,6 @@ service_account.json
 wages_ingest.py
 wages_sample.csv
 #local database
-seed_firestore.py
+dump_wages.py
+#test
+test_dispatcher.py

@@ -9,7 +9,7 @@ api requests.py
 # Logs
 *.log
 #test scripts
-test_script.py
+test_dispatcher.py
 test_statgov.py
 #proxy script
 proxy_searcher.py
@@ -29,5 +29,5 @@ wages_ingest.py
 wages_sample.csv
 
 #local database
-seed_firestore.py
+dump_wages.py
 
