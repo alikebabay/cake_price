@@ -11,7 +11,7 @@ import re
 
 PORT = int(os.getenv("PORT", "8080"))                  # Cloud Run даст $PORT
 PUBLIC_URL = os.getenv("PUBLIC_URL", "").rstrip("/")   # сюда вставим URL сервиса после деплоя
-WEBHOOK_PATH = "/tgwebhook"                            # конечная точка вебхука
+WEBHOOK_PATH = "tgwebhook"                           # конечная точка вебхука
 
 
 # Включим ведение журнала
@@ -116,36 +116,31 @@ async def error(update: object, context: ContextTypes.DEFAULT_TYPE):
 def main():
     if not TOKEN:
         print("⚠️ WARNING: TELEGRAM_TOKEN is not set. Бот не сможет работать без токена.", flush=True)
-        # но не выходим, чтобы Cloud Run мог запуститься и ты увидел лог
         return
 
     print(f"Бот запускается... @{BOT_USERNAME}" if BOT_USERNAME else "Бот запускается...", flush=True)
 
     app = Application.builder().token(TOKEN).concurrent_updates(False).build()
-    if PUBLIC_URL:
-        # Cloud Run / прод: только вебхук
-        app.run_webhook(
-            listen="0.0.0.0",
-            port=PORT,
-            webhook_path=WEBHOOK_PATH,
-            webhook_url=f"{PUBLIC_URL}{WEBHOOK_PATH}",
-            allowed_updates=Update.ALL_TYPES,
-        )
-    else:
-        # Локально: polling
-        app.run_polling(allowed_updates=Update.ALL_TYPES)
 
-    # регистрируем из шага 8
+    # Хендлеры
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("custom", custom_command))
     app.add_handler(CommandHandler("cancel", cancel))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
 
-
-
+    if PUBLIC_URL:
+        print(f"🌐 Запуск вебхука на {PUBLIC_URL}/{WEBHOOK_PATH}", flush=True)
+        app.run_webhook(  # 🔁 не await!
+            listen="0.0.0.0",
+            port=PORT,
+            url_path=WEBHOOK_PATH,
+            webhook_url=f"{PUBLIC_URL}/{WEBHOOK_PATH}",
+            allowed_updates=Update.ALL_TYPES,
+        )
+    else:
+        print("🌀 Запуск polling...", flush=True)
+        app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
     main()
-
-
