@@ -129,7 +129,7 @@ def main():
     app.add_handler(CommandHandler("cancel", cancel))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
 
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
+
     if PUBLIC_URL:
         # Вебхук для продакшна (Cloud Run)
         app.run_webhook(
