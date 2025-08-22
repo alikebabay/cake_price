@@ -129,18 +129,18 @@ def main():
     app.add_handler(CommandHandler("cancel", cancel))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
 
-
     if PUBLIC_URL:
-        # Вебхук для продакшна (Cloud Run)
+        # Cloud Run / прод: только вебхук
         app.run_webhook(
             listen="0.0.0.0",
             port=PORT,
             webhook_path=WEBHOOK_PATH,
             webhook_url=f"{PUBLIC_URL}{WEBHOOK_PATH}",
+            allowed_updates=Update.ALL_TYPES,
         )
     else:
-        # Polling для локальной разработки
-        app.run_polling()
+        # Локально: polling
+        app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
 if __name__ == "__main__":
