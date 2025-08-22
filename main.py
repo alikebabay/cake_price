@@ -115,20 +115,13 @@ async def error(update: object, context: ContextTypes.DEFAULT_TYPE):
 #запуск бота
 def main():
     if not TOKEN:
-        print("FATAL: TELEGRAM_TOKEN is not set", flush=True)
-        raise SystemExit(1)
+        print("⚠️ WARNING: TELEGRAM_TOKEN is not set. Бот не сможет работать без токена.", flush=True)
+        # но не выходим, чтобы Cloud Run мог запуститься и ты увидел лог
+        return
 
     print(f"Бот запускается... @{BOT_USERNAME}" if BOT_USERNAME else "Бот запускается...", flush=True)
 
     app = Application.builder().token(TOKEN).concurrent_updates(False).build()
-
-    # регистрируем из шага 8
-    app.add_handler(CommandHandler("start", start_command))
-    app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CommandHandler("custom", custom_command))
-    app.add_handler(CommandHandler("cancel", cancel))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
-
     if PUBLIC_URL:
         # Cloud Run / прод: только вебхук
         app.run_webhook(
@@ -141,6 +134,15 @@ def main():
     else:
         # Локально: polling
         app.run_polling(allowed_updates=Update.ALL_TYPES)
+
+    # регистрируем из шага 8
+    app.add_handler(CommandHandler("start", start_command))
+    app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("custom", custom_command))
+    app.add_handler(CommandHandler("cancel", cancel))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
+
+
 
 
 if __name__ == "__main__":
