@@ -5,20 +5,19 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Сначала зависимости — для кеша слоёв
+# Сначала зависимости — кеш слоёв
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Код
+# Копируем код
 COPY . .
 
-# обязательно копируем пакет с json-ами
+# Копируем json-ы отдельно — на всякий
 COPY cake_data/ cake_data/
 
-# Каталог для БД (в контейнере)
-RUN mkdir -p /data
-ENV DB_PATH=/data/exchange_rates.db
+# Cloud Run передаёт порт через переменную окружения $PORT
+# Обязательно слушать на этом порту внутри контейнера
+EXPOSE 8080
 
-#renamed to Dockerfile
-
+# Запускаем бота
 CMD ["python", "main.py"]

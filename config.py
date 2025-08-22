@@ -3,17 +3,19 @@ import sys
 from pathlib import Path
 from typing import Final
 
-# базовая цена торта. Пока константа
+# Базовая цена торта
 CAKE_PRICE_KZT: Final[float] = 600_000
 
-# UNECE
+# Источник UNECE
 UNECE_YEAR = 2024
 UNECE_UNIT = "USD"
+
+# Убираем @ в начале username
 def _normalize_username(s: str | None) -> str:
     s = (s or "").strip()
     return s[1:] if s.startswith("@") else s
 
-# TELEGRAM_TOKEN из окружения или из Docker secret-файла
+# TOKEN и BOT_USERNAME из окружения
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 if not TOKEN:
     token_file = os.getenv("TELEGRAM_TOKEN_FILE")
@@ -21,15 +23,6 @@ if not TOKEN:
         TOKEN = Path(token_file).read_text().strip()
 
 BOT_USERNAME = _normalize_username(os.getenv("BOT_USERNAME"))
-
-# В Cloud Run есть env K_SERVICE — используем /tmp
-if os.getenv("K_SERVICE"):
-    default_db = "/tmp/exchange_rates.db"
-else:
-    default_db = str(Path(__file__).with_name("exchange_rates.db"))
-
-# Путь к БД
-DB_PATH = os.getenv("DB_PATH", str(Path(__file__).with_name("exchange_rates.db")))
 
 def assert_required():
     if not TOKEN:

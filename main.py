@@ -51,7 +51,7 @@ def _sanitize_pair(ccy_code: str | None, country_iso3: str | None) -> tuple[str 
 async def start_command(update, context):
     await update.message.reply_text(
         "Узнать цену казахского торта.\n"
-        "Выберите популярную валюту или введите первые 4 буквы названия страны (напр., «амер»).",
+        "Выберите популярную валюту или введите первые 4-5 букв названия страны (напр., «амер», «австри»).",
         reply_markup=build_currency_keyboard(),
     )
 
@@ -98,8 +98,10 @@ async def cancel(update, context):
 #другие команды
 async def help_command(update, context):
     await update.message.reply_text(
-        "Пришлите валюту (USD, $, рубль, юань) или страну (США, Kazakhstan). "
-        "Нажмите /start для клавиатуры."
+        "Вдохновителем бота стала история с <a href='https://tengrinews.kz/story/istoriya-pro-tort-600-tyisyach-tenge-516358/'>неоплаченным тортом за 600 тысяч</a>.\n\n"
+        "Нажмите /start для клавиатуры.",
+        parse_mode="HTML",
+        disable_web_page_preview=True
     )
 
 async def custom_command(update, context):
@@ -128,7 +130,17 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
 
     app.run_polling(allowed_updates=Update.ALL_TYPES)
-
+    if PUBLIC_URL:
+        # Вебхук для продакшна (Cloud Run)
+        app.run_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            webhook_path=WEBHOOK_PATH,
+            webhook_url=f"{PUBLIC_URL}{WEBHOOK_PATH}",
+        )
+    else:
+        # Polling для локальной разработки
+        app.run_polling()
 
 
 if __name__ == "__main__":

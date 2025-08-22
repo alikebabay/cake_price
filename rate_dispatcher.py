@@ -4,6 +4,7 @@ from calculator import convert_kzt, compute_cake_salary, _get_usd_kzt_rate
 from datetime import datetime, timedelta
 from config import CAKE_PRICE_KZT, UNECE_UNIT, UNECE_YEAR
 import re
+from salary_card import salary_card
 
 MAX_AGE_HOURS = 24
 
@@ -145,10 +146,15 @@ async def serve_cached_and_update(update, ccy_code: str | None, country_iso3: st
 
                 if price_usd is not None:
                     extra = append_salary_iso3(iso3, price_usd)
-                    if not extra:
-                        parts.append("⚠️ Зарплата для указанной страны не найдена.")
+                    if extra:
+                        # если есть карточка — отправляем её и выходим (всё остальное игнорим)
+                        try:
+                            await update.message.reply_text(extra, parse_mode="HTML", disable_web_page_preview=True)
+                        except Exception as e:
+                            logging.exception("reply_text (card) failed: %s", e)
+                        return
                     else:
-                        parts.append(extra)
+                        parts.append("⚠️ Зарплата для указанной страны не найдена.")
         except Exception as e:
             logging.exception("Salary block failed: %s", e)
             parts.append("⚠️ Ошибка обработки данных по зарплате.")
@@ -204,13 +210,17 @@ def append_salary_iso3(iso3: str, price_usd: float) -> str | None:
     src_year = src.get("year", UNECE_YEAR)
     src_url = src.get("url", "")
     upd_display = _fmt_ts(doc.get("updated_at") or doc.get("ingested_at") or calc.get("updated_at"))
+    # 👇 ДОБАВЬ ЭТО:
+    calc["country"] = doc.get("country", iso3)
+    calc["unit"] = doc.get("unit", "USD")
+    calc["value"] = salary_usd_f
+    calc["source"] = doc.get("source", {})
+    calc["converted_price"] = price_usd_f
+    calc["converted_ccy"] = "USD"
+    calc["conversion_time"] = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
     try:
-        return (
-            f"Средняя зарплата в {country_name}: {calc['salary_kzt']:,.0f} KZT"
-            f"\nИсточник: {src_name} ({src_year}), ссылка: {src_url} ({upd_display})"
-            f"\nЭто ≈ {calc['cake_salary']:,.2f} тортов (600 000 KZT за торт)"
-        )
+        return salary_card(calc)
     except Exception:
         return f"Средняя зарплата в {country_name}: {calc.get('salary_kzt')} KZT; ≈ {calc.get('cake_salary')} тортов."
 
