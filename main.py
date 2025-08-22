@@ -7,8 +7,7 @@ import os
 from config import TOKEN, BOT_USERNAME, assert_required
 from rate_dispatcher import serve_cached_and_update
 from cake_dictionary import resolve_user_input
-from db import get_wage_doc, upsert_wage_doc  # ← просто чтобы было видно зависимость (использует диспетчер)
-
+import re
 
 PORT = int(os.getenv("PORT", "8080"))                  # Cloud Run даст $PORT
 PUBLIC_URL = os.getenv("PUBLIC_URL", "").rstrip("/")   # сюда вставим URL сервиса после деплоя
@@ -22,109 +21,90 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
-#состояния - глубина меню
-MENU = 1
 
+POPULAR_CURRENCIES: Final[tuple[str, ...]] = (
+    "USD", "UAH", "BYN", "RUB", "CNY", "UZS", "KGS", "AMD", "GBP"
+)
+#клавиатура пользователя
+def build_currency_keyboard() -> ReplyKeyboardMarkup:
+    keyboard = [[KeyboardButton(code)] for code in sorted(POPULAR_CURRENCIES)]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-POPULAR_CURRENCIES = "USD, UAH, BYN, RUB, CNY, UZS, KGS, AMD, GBP"
 
 #нормализатор
 def _norm_cmd(s: str) -> str:
     return (s or "").strip().upper().replace("Ё", "Е")
 CANCEL_ALIASES = {"EXIT", "ВЫХОД", "ОТМЕНА", "CANCEL"}
 
-
+#санитайзер для удаления united states
+def _sanitize_pair(ccy_code: str | None, country_iso3: str | None) -> tuple[str | None, str | None]:
+    ccy = (ccy_code or "").strip().upper()
+    iso3 = (country_iso3 or "").strip().upper()
+    if not re.fullmatch(r"[A-Z]{3}", ccy):
+        ccy = None
+    if not re.fullmatch(r"[A-Z]{3}", iso3):
+        iso3 = None
+    return ccy, iso3
 
 #управление ботом
 #команда старт
-async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [[KeyboardButton(code)] for code in sorted(POPULAR_CURRENCIES)]
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+async def start_command(update, context):
     await update.message.reply_text(
-        "Узнать цену казахского торта. Выберите популярную валюту или введите первые 4 буквы названия страны. Например, амер",
-        reply_markup=reply_markup
+        "Узнать цену казахского торта.\n"
+        "Выберите популярную валюту или введите первые 4 буквы названия страны (напр., «амер»).",
+        reply_markup=build_currency_keyboard(),
     )
-    return MENU
 
 
-
-# ISO-коды вне диалога (раньше тут было просто .upper())
-async def iso_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    raw = (update.message.text or "").strip()
-    ccy_code, country_iso3 = resolve_user_input(raw)  # ('USD','USA') | (None,'KAZ') | (None,None)
-
-    if not ccy_code and not country_iso3:
-        await update.message.reply_text(
-            "Не распознал ввод. Введите валюту ($, USD, тенге) или страну (США, Kazakhstan)."
-        )
+#обработчик текста общий
+async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = update.message
+    if not msg:
         return
 
-    await serve_cached_and_update(update, ccy_code=ccy_code, country_iso3=country_iso3)
+    text = (msg.text or "").strip()
 
-# выбор валюты (оставляем ту же логику, но используем общий резолвер)
-async def choose_currency(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    raw = (update.message.text or "").strip()
-
-    if _norm_cmd(raw) in CANCEL_ALIASES:
-        return await cancel(update, context)
-
-    ccy_code, country_iso3 = resolve_user_input(raw)
-
-    if ccy_code or country_iso3:
-        await serve_cached_and_update(update, ccy_code=ccy_code, country_iso3=country_iso3)
-        return MENU
-
-    await update.message.reply_text(
-        "Не распознал ввод. Популярные — на клавиатуре. "
-        "Можно прислать ISO-код (EUR, GBP, TRY) или название страны (например: США, Kazakhstan)."
-    )
-    return MENU
-
-# Обработка /cancel
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Диалог завершён. Нажмите /start, чтобы начать заново.",
-        reply_markup=ReplyKeyboardRemove()
-    )
-    return ConversationHandler.END
-
-#другие команды
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Напишите валюту текстом (USD, рубль, юань) или используйте /start.")
-
-async def custom_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Это стандартный запрос")
-
-#использование бота в чатах
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    message_type: str = update.message.chat.type
-    text: str = (update.message.text or "").strip()
-
-    # В группах — реагируем только на упоминание бота
-    if message_type in {"group", "supergroup"}:
+    # в группах реагируем только на упоминание бота
+    if msg.chat.type in {"group", "supergroup"}:
         if not BOT_USERNAME or BOT_USERNAME not in text:
             return
         text = text.replace(BOT_USERNAME, "").strip()
 
-    # Служебные выходные слова
+    # служебные слова выхода
     if _norm_cmd(text) in CANCEL_ALIASES:
-        await update.message.reply_text("Диалог завершён. Нажмите /start, чтобы начать заново.")
+        await cancel(update, context)
         return
 
-    # Универсальный резолвер: валюта/страна → (ccy_code, iso3)
+    # ВСЕГДА: сначала резолвер → потом санитайзер → потом диспетчер
     ccy_code, country_iso3 = resolve_user_input(text)
+    ccy_code, country_iso3 = _sanitize_pair(ccy_code, country_iso3)
 
     if ccy_code or country_iso3:
-        # Лог по желанию
-        # logging.debug("Resolved input: ccy=%s iso3=%s", ccy_code, country_iso3)
         await serve_cached_and_update(update, ccy_code=ccy_code, country_iso3=country_iso3)
         return
 
-    # Подсказка
-    await update.message.reply_text(
-        "Не распознал ввод. Популярные валюты — на клавиатуре. "
+    await msg.reply_text(
+        "Не распознал ввод. Популярные валюты — на клавиатуре (/start). "
         "Или пришлите ISO-код (EUR, GBP, TRY) или название страны (США, Kazakhstan)."
     )
+
+# Обработка /cancel
+async def cancel(update, context):
+    await update.message.reply_text(
+        "Диалог завершён. Нажмите /start, чтобы начать заново.",
+        reply_markup=ReplyKeyboardRemove(),
+    )
+
+#другие команды
+async def help_command(update, context):
+    await update.message.reply_text(
+        "Пришлите валюту (USD, $, рубль, юань) или страну (США, Kazakhstan). "
+        "Нажмите /start для клавиатуры."
+    )
+
+async def custom_command(update, context):
+    await update.message.reply_text("Это стандартный запрос.")
+
 
 #обработка ошибок
 async def error(update: object, context: ContextTypes.DEFAULT_TYPE):
@@ -138,30 +118,16 @@ def main():
 
     print(f"Бот запускается... @{BOT_USERNAME}" if BOT_USERNAME else "Бот запускается...", flush=True)
 
-    application = Application.builder().token(TOKEN).concurrent_updates(False).build()
+    app = Application.builder().token(TOKEN).concurrent_updates(False).build()
 
-    # Диалог выбора (внутри состояния MENU используем choose_currency → resolve_user_input)
-    conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("start", start_command)],
-        states={
-            MENU: [MessageHandler(filters.TEXT & ~filters.COMMAND, choose_currency)]
-        },
-        fallbacks=[CommandHandler("cancel", cancel)],
-    )
-    application.add_handler(conv_handler, group=0)
+    # регистрируем из шага 8
+    app.add_handler(CommandHandler("start", start_command))
+    app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("custom", custom_command))
+    app.add_handler(CommandHandler("cancel", cancel))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
 
-    # Остальные команды (если есть)
-    application.add_handler(CommandHandler("help", help_command), group=0)
-    application.add_handler(CommandHandler("custom", custom_command), group=0)
-
-    # Общий обработчик для чатов/групп, когда мы НЕ в состоянии диалога
-    # (использует resolve_user_input внутри handle_message)
-    application.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message),
-        group=1,   # важно: после conv_handler
-    )
-
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
 

@@ -1,102 +1,98 @@
-# cake_dictionary.py
-from typing import Final, Optional, Tuple, Mapping
+# cake_dictionary.py  (простая версия)
 import json, re, unicodedata
-from importlib.resources import files
+from pathlib import Path
 
-# ── нормализация ──────────────────────────────────────────────────────────────
+# Где лежат json-файлы
+DATA_DIR = Path(__file__).resolve().parent / "cake_data"
+
+def _load_json(name: str):
+    path = DATA_DIR / name
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+# Нормализация
 def _norm_ccy(s: str) -> str:
-    # для валют: убираем пробелы/лишние знаки, оставляем буквы/цифры/символы валют
+    # валюты: вверхний регистр, выкидываем всё кроме латинских букв/цифр/символов валют
     s = unicodedata.normalize("NFKC", (s or "")).strip().upper().replace("Ё", "Е")
     return re.sub(r"[^A-ZА-Я0-9$₽¥₼€£]", "", s)
 
 def _norm_country(s: str) -> str:
-    # для стран: сохраняем пробелы между словами
+    # страны: вверхний регистр, схлопываем пробелы (знаки не трогаем — у тебя в json есть скобки)
     s = unicodedata.normalize("NFKC", (s or "")).strip().upper().replace("Ё", "Е")
     return re.sub(r"\s+", " ", s)
 
-# ── загрузка данных ───────────────────────────────────────────────────────────
-def _load_json(pkgfile: str) -> dict:
-    return json.loads(files("cake_data").joinpath(pkgfile).read_text("utf-8"))
+# Загружаем данные
+_aliases_raw              = _load_json("aliases.json")                 # {"USD": ["USD","$","ДОЛЛАР",...]} — ТОЛЬКО валюты
+_ccy_to_iso3_raw          = _load_json("currency_to_iso3.json")        # {"USD":"USA", "KZT":"KAZ", ...} (ISO3 справа; null допускается)
+_country_name_to_iso3_raw = _load_json("country_name_to_iso3.json")    # {"UNITED STATES":"USA", "БЕЛЬГИЯ":"BEL", "БЕЛГ":"BEL", ...}
 
-_ALIASES_RAW = _load_json("aliases.json")  # {"USD": ["USD","$","ДОЛЛАР",...]}
-_CCY_TO_ISO3_RAW = _load_json("currency_to_iso3.json")  # {"USD":"USA", ...}
-_COUNTRY_NAME_TO_ISO3_RAW = _load_json("country_name_to_iso3.json")  # {"UNITED STATES":"USA", ...}
-
-# ── утилиты для очистки ───────────────────────────────────────────────────────
-def _to_upper(s) -> str | None:
-    if isinstance(s, str):
-        s2 = s.strip().upper()
-        return s2 or None
-    return None
-
-# ── построение мап (безопасно к мусору) ──────────────────────────────────────
-# алиас валюты → ISO-код валюты
-_alias_map: dict[str, str] = {}
-for code, aliases in (_ALIASES_RAW or {}).items():
-    code_u = _to_upper(code)
-    if not code_u or not isinstance(aliases, list):
+# Строим: алиас валюты → код валюты
+ALIAS_TO_CCY = {}
+for code, aliases in (_aliases_raw or {}).items():
+    if not isinstance(aliases, list):
         continue
-    for alias in aliases:
-        alias_u = _to_upper(alias)
-        if alias_u:
-            _alias_map[alias_u] = code_u
-    # код на самого себя
-    _alias_map[code_u] = code_u
+    code_key = _norm_ccy(str(code))
+    if not code_key:
+        continue
+    ALIAS_TO_CCY[code_key] = code_key  # сам код тоже алиас
+    for a in aliases:
+        if isinstance(a, str):
+            k = _norm_ccy(a)
+            if k:
+                ALIAS_TO_CCY[k] = code_key
 
-ALIAS_TO_CODE: Final[Mapping[str, str]] = _alias_map
+# Строим: ISO3 → базовая валюта страны (только если однозначно задана)
+ISO3_TO_CCY = {}
+for ccy, iso3 in (_ccy_to_iso3_raw or {}).items():
+    if isinstance(ccy, str) and isinstance(iso3, str):
+        c = ccy.strip().upper()
+        i = iso3.strip().upper()
+        if len(c) == 3 and len(i) == 3:
+            ISO3_TO_CCY[i] = c
 
-# валюта → ISO3 страны
-_CCY_TO_ISO3: dict[str, str] = {}
-for k, v in (_CCY_TO_ISO3_RAW or {}).items():
-    k_u, v_u = _to_upper(k), _to_upper(v)
-    if k_u and v_u:
-        _CCY_TO_ISO3[k_u] = v_u
-_CCY_TO_ISO3 = _CCY_TO_ISO3  # keep as dict or wrap in Mapping if нужно
-# при желании: _CCY_TO_ISO3: Final[Mapping[str, str]] = _CCY_TO_ISO3
+# Строим: название страны/алиас → ISO3
+COUNTRY_NAME_TO_ISO3 = {}
+for k, v in (_country_name_to_iso3_raw or {}).items():
+    if isinstance(k, str) and isinstance(v, str):
+        COUNTRY_NAME_TO_ISO3[_norm_country(k)] = v.strip().upper()
 
-# название страны → ISO3
-COUNTRY_NAME_TO_ISO3: dict[str, str] = {}
-def _norm_country(s: str) -> str:
-    import unicodedata, re
-    s = unicodedata.normalize("NFKC", (s or "")).strip().upper().replace("Ё", "Е")
-    return re.sub(r"\s+", " ", s)
+def resolve_user_input(raw: str):
+    """
+    Возвращает (ccy_code | None, country_iso3 | None).
 
-for k, v in (_COUNTRY_NAME_TO_ISO3_RAW or {}).items():
-    k_u, v_u = _to_upper(k), _to_upper(v)
-    if k_u and v_u:
-        COUNTRY_NAME_TO_ISO3[_norm_country(k_u)] = v_u
+    Правила:
+    - если введена валюта/её алиас → (CCY, None)
+    - если введена страна/её алиас (в т.ч. 4 буквы по-русски из json) → (валюта страны если известна, ISO3)
+    - если распознаны оба (редко) → приоритет у явной валюты ввода
+    """
+    text_ccy = _norm_ccy(raw)
+    text_cty = _norm_country(raw)
 
+    # 1) валюта по алиасам
+    ccy = None
+    if re.fullmatch(r"[A-Z]{3}", text_ccy):
+        ccy = text_ccy
+    else:
+        ccy = ALIAS_TO_CCY.get(text_ccy)
 
-# ── API ───────────────────────────────────────────────────────────────────────
-def to_ccy_code(user_input: str) -> Optional[str]:
-    """Любой ввод про валюту → ISO4217 (USD/EUR/...)."""
+    # 2) страна по названиям/алиасам
+    iso3 = COUNTRY_NAME_TO_ISO3.get(text_cty)
+
+    # 3) если есть ISO3 и валюта не распознана напрямую — попробуем подтянуть по ISO3
+    if iso3 and not ccy:
+        ccy = ISO3_TO_CCY.get(iso3)
+
+    return ccy, iso3
+
+# опционально — простые геттеры, если где-то в коде пригодятся
+def iso3_from_country_name(name: str):
+    return COUNTRY_NAME_TO_ISO3.get(_norm_country(name))
+
+def to_ccy_code(user_input: str):
     key = _norm_ccy(user_input)
-    if m := re.fullmatch(r"[A-Z]{3}", key):
+    if re.fullmatch(r"[A-Z]{3}", key):
         return key
-    return ALIAS_TO_CODE.get(key)
-
-def iso3_from_currency(ccy: str | None) -> Optional[str]:
-    """Код валюты → ISO3 страны (USD→USA, KZT→KAZ...)."""
-    return _CCY_TO_ISO3.get((ccy or "").strip().upper()) if ccy else None
-
-def iso3_from_country_name(country_name: str) -> Optional[str]:
-    """Название страны → ISO3 (UNITED STATES→USA)."""
-    return COUNTRY_NAME_TO_ISO3.get(_norm_country(country_name))
-
-def resolve_user_input(raw: str) -> Tuple[Optional[str], Optional[str]]:
-    """
-    Универсальный резолвер: из одного ввода получаем (валюта ISO4217, страна ISO3).
-    Примеры:
-      'амер' / '$' / 'usd'      → ('USD', 'USA')
-      'United States' / 'США'   → ('USD', 'USA')  # при наличии в json
-    """
-    # 1) пробуем как валюту
-    ccy = to_ccy_code(raw)
-    if ccy:
-        return ccy, iso3_from_currency(ccy)
-    # 2) пробуем как страну
-    iso3 = iso3_from_country_name(raw)
-    if iso3:
-        # опционально: если нужна «домашняя» валюта страны — добавь обратную мапу iso3->ccy
-        return to_ccy_code("USD") if iso3 == "USA" else None, iso3
-    return None, None
+    return ALIAS_TO_CCY.get(key)

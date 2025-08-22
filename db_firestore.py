@@ -48,12 +48,16 @@ def _doc_id_candidates_from_iso3(iso3: str, year: int, unit: str) -> list[str]:
 # ───────────────────────────────
 # WAGES
 
-def get_wage_doc(iso3: str, year: int = UNECE_YEAR, unit: str = UNECE_UNIT) -> dict | None:
-    """Пробуем найти документ и по ISO3, и по NAME (для старой схемы ID)."""
-    for doc_id in _doc_id_candidates_from_iso3(iso3, year, unit):
-        snap = _wages_col().document(doc_id).get()
-        if snap.exists:
-            return snap.to_dict()
+def get_wage_doc(iso3: str) -> dict | None:
+    print(f"[DEBUG] get_wage_doc iso3={repr(iso3)}")
+
+    db = firestore.Client()
+    col = db.collection("avg_wages_unece")
+
+    docs = col.where("iso3", "==", iso3).limit(1).stream()
+    for doc in docs:
+        return doc.to_dict()
+
     return None
 
 def upsert_wage_doc(iso3: str, patch: dict, year: int = UNECE_YEAR, unit: str = UNECE_UNIT) -> None:
