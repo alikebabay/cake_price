@@ -103,6 +103,7 @@ async def serve_cached_and_update(update, ccy_code: str | None, country_iso3: st
                     )
                 else:
                     parts.append("⚠️ Нет актуального курса для выбранной валюты.")
+
         except Exception as e:
             logging.exception("FX block failed: %s", e)
             parts.append("⚠️ Ошибка обработки курса валюты.")
@@ -145,11 +146,19 @@ async def serve_cached_and_update(update, ccy_code: str | None, country_iso3: st
                             logging.warning("cache_rate(%s) failed: %s", usd_title, e)
 
                 if price_usd is not None:
-                    extra = append_salary_iso3(iso3, price_usd)
-                    if extra:
-                        # если есть карточка — отправляем её и выходим (всё остальное игнорим)
+                    calc = append_salary_iso3(iso3, price_usd)
+                    if calc:
+                        # доклеиваем результат валютного блока
+                        calc["amount"] = amount
+                        calc["ccy_code"] = ccy_code
+                        calc["ts_display"] = ts_display
+
                         try:
-                            await update.message.reply_text(extra, parse_mode="HTML", disable_web_page_preview=True)
+                            await update.message.reply_text(
+                                salary_card(calc),
+                                parse_mode="HTML",
+                                disable_web_page_preview=True
+                            )
                         except Exception as e:
                             logging.exception("reply_text (card) failed: %s", e)
                         return
@@ -220,10 +229,9 @@ def append_salary_iso3(iso3: str, price_usd: float) -> str | None:
     calc["conversion_time"] = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
     try:
-        return salary_card(calc)
+        return calc
     except Exception:
         return f"Средняя зарплата в {country_name}: {calc.get('salary_kzt')} KZT; ≈ {calc.get('cake_salary')} тортов."
-
 #форматтер времени
 def _fmt_ts(ts) -> str:
     if not ts:

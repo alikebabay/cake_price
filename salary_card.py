@@ -20,9 +20,9 @@ def salary_card(calc: dict, cake_price_kzt: int = 600_000) -> str:
     updated_at = calc.get("ingested_at") or calc.get("updated_at")
 
     # Конвертация торта
-    converted_price = calc.get("converted_price")
-    converted_ccy = calc.get("converted_ccy", "???")
-    converted_at = calc.get("conversion_time")
+    converted_price = calc.get("amount")
+    converted_ccy = calc.get("ccy_code", "???")
+    converted_at = calc.get("ts_display")
 
     lines = []
 
