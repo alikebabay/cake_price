@@ -6,11 +6,31 @@ from pathlib import Path
 DATA_DIR = Path(__file__).resolve().parent / "cake_data"
 
 def _load_json(name: str):
+    """
+    Загружаем JSON:
+    - prod: Firestore (collection=name_without_json, document=name_without_json)
+    - dev: локальный JSON-файл cake_data/name
+    """
+    collection = name.replace(".json", "")
+    try:
+        from google.cloud import firestore
+        db = firestore.Client()
+
+        # читаем ровно один документ с таким же именем, как коллекция
+        doc_ref = db.collection(collection).document(collection)
+        doc = doc_ref.get()
+        if doc.exists:
+            return doc.to_dict()
+    except Exception as e:
+        print(f"⚠️ Firestore недоступен для {collection}, fallback на локальный JSON ({e})")
+
+    # fallback → локальный JSON (dev)
     path = DATA_DIR / name
     try:
         with path.open("r", encoding="utf-8") as f:
             return json.load(f)
-    except Exception:
+    except Exception as e:
+        print(f"❌ Ошибка чтения локального {name}: {e}")
         return {}
 
 # Нормализация
