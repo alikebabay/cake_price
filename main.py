@@ -51,7 +51,7 @@ def _sanitize_pair(ccy_code: str | None, country_iso3: str | None) -> tuple[str 
 async def start_command(update, context):
     await update.message.reply_text(
         "Узнать цену казахского торта.\n"
-        "Выберите популярную валюту или введите первые 4-5 букв названия страны (напр., «амер», «австри»).",
+        "Выберите популярную валюту или введите первые 4-5 букв названия страны (напр., «амер», «австри»). Для подробностей о проекте нажмите /help",
         reply_markup=build_currency_keyboard(),
     )
 

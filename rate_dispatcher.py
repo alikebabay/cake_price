@@ -99,7 +99,7 @@ async def serve_cached_and_update(update, ccy_code: str | None, country_iso3: st
 
                 if amount is not None:
                     parts.append(
-                        f"{'Кэш' if cached and use_cache else 'Обновил'} • 600 000 KZT = {amount:,.2f} {ccy_code} (обновлено: {ts_display})"
+                        f"{'Казахский торт стоит' if cached and use_cache else 'Казахский торт стоит'} {amount:,.2f} {ccy_code} (обновлено: {ts_display})"
                     )
                 else:
                     parts.append("⚠️ Нет актуального курса для выбранной валюты.")
